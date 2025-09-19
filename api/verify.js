@@ -1,38 +1,31 @@
-import { initializeApp, cert } from "firebase-admin/app";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, getDoc, updateDoc } from "firebase/firestore";
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+const firebaseConfig = {
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_PROJECT_ID + ".firebaseapp.com",
+  projectId: process.env.FIREBASE_PROJECT_ID,
+};
 
-// Init Firebase Admin
-initializeApp({ credential: cert(serviceAccount) });
-const db = getFirestore();
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 export default async function handler(req, res) {
-  if(req.method !== "POST") return res.status(405).json({ status:"error", message:"Method not allowed" });
-  
-  try{
-    const { key } = req.body;
-    if(!key || !/^Lunar_[A-Z0-9]{20}$/.test(key)) return res.status(400).json({ status:"error", message:"Invalid key format" });
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-    const docRef = db.collection("keys").doc(key);
-    const docSnap = await docRef.get();
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ error: "Missing key" });
 
-    if(!docSnap.exists) return res.json({ status:"success", isValid:false });
+  const ref = doc(db, "keys", key);
+  const snap = await getDoc(ref);
 
-    const data = docSnap.data();
-    const now = Timestamp.now();
+  if (!snap.exists()) return res.json({ valid: false, reason: "Key not found" });
 
-    // Check 24h expiration
-    if(data.used || (now.toMillis() - data.createdAt.toMillis()) > 24*60*60*1000){
-      return res.json({ status:"success", isValid:false });
-    }
+  const data = snap.data();
+  if (data.used) return res.json({ valid: false, reason: "Key already used" });
+  if (Date.now() > data.expiresAt) return res.json({ valid: false, reason: "Key expired" });
 
-    // Mark as used
-    await docRef.update({ used:true });
+  await updateDoc(ref, { used: true });
 
-    return res.json({ status:"success", isValid:true });
-  }catch(e){
-    console.error(e);
-    return res.status(500).json({ status:"error", message:e.message });
-  }
+  return res.json({ valid: true });
 }
