@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LunarKey AIO</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #111; color: #eee; text-align: center; padding: 50px; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; background: #4CAF50; color: white; font-size: 16px; }
+    a { color: #0af; }
+    #msg { margin-top: 20px; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h1>🌙 LunarKey System</h1>
+  <button id="genBtn">Generate Key</button>
+  <p id="msg"></p>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyD_ujJmgqK6DJJd7RymFiUpE-kY7hQsdGg",
+      authDomain: "sourcestore999ms.firebaseapp.com",
+      projectId: "sourcestore999ms",
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Random key generator
+    function rand15() {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let s = '';
+      for (let i=0;i<15;i++) s += chars.charAt(Math.floor(Math.random()*chars.length));
+      return s;
+    }
+
+    const msg = document.getElementById("msg");
+
+    // Check mode: if ?id=xxx then show key, else show generate button
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+
+    if (id) {
+      // === Key Viewer Mode ===
+      (async ()=>{
+        try {
+          const snap = await getDoc(doc(db, "keys", id));
+          if (!snap.exists()) { msg.textContent = "❌ Key không tồn tại"; return; }
+          const data = snap.data();
+          const linkCreatedAt = new Date(data.linkCreatedAt);
+          if (new Date().getTime() - linkCreatedAt.getTime() > 5*60*1000) {
+            msg.textContent = "❌ Link đã hết hạn (5 phút)";
+            return;
+          }
+          msg.textContent = "✅ Key của bạn: " + data.value;
+        } catch {
+          msg.textContent = "⚠️ Lỗi khi đọc dữ liệu";
+        }
+      })();
+      document.getElementById("genBtn").style.display = "none";
+    } else {
+      // === Generate Mode ===
+      document.getElementById("genBtn").onclick = async () => {
+        const keyId = "lunar_" + rand15();
+        const now = new Date();
+        const createdAt = now.toISOString();
+        const validUntil = new Date(now.getTime() + 24*60*60*1000).toISOString();
+        await setDoc(doc(db, "keys", keyId), {
+          value: keyId,
+          createdAt,
+          validUntil,
+          linkCreatedAt: createdAt
+        });
+        const link = window.location.href.split("?")[0] + "?id=" + keyId;
+        msg.innerHTML = `👉 Key được tạo: <a href="${link}">${link}</a>`;
+      };
+    }
+  </script>
+</body>
+</html>
