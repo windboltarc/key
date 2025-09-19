@@ -1,82 +1,70 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>LunarKey AIO</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #111; color: #eee; text-align: center; padding: 50px; }
-    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; background: #4CAF50; color: white; font-size: 16px; }
-    a { color: #0af; }
-    #msg { margin-top: 20px; font-size: 18px; }
-  </style>
+  <title>Lunar GetKey</title>
 </head>
-<body>
-  <h1>🌙 LunarKey System</h1>
+<body style="font-family:sans-serif;text-align:center;margin-top:50px">
+  <h1>🔑 Lunar Key Generator</h1>
   <button id="genBtn">Generate Key</button>
-  <p id="msg"></p>
+  <div id="result" style="margin-top:20px"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+<script>
+const projectId = "sourcestore999ms";
+const apiKey = "AIzaSyD_ujJmgqK6DJJd7RymFiUpE-kY7hQsdGg";
 
-    // Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyD_ujJmgqK6DJJd7RymFiUpE-kY7hQsdGg",
-      authDomain: "sourcestore999ms.firebaseapp.com",
-      projectId: "sourcestore999ms",
-    };
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+function randomKey() {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let s = "";
+  for (let i=0;i<15;i++) s += chars.charAt(Math.floor(Math.random()*chars.length));
+  return "lunar_" + s;
+}
 
-    // Random key generator
-    function rand15() {
-      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let s = '';
-      for (let i=0;i<15;i++) s += chars.charAt(Math.floor(Math.random()*chars.length));
-      return s;
+document.getElementById("genBtn").onclick = async () => {
+  const key = randomKey();
+  const now = Date.now();
+
+  // 24h hết hạn key
+  const data = {
+    fields: {
+      value: { stringValue: key },
+      createdAt: { integerValue: now },
+      validUntil: { integerValue: now + 24*60*60*1000 },
+      linkCreatedAt: { integerValue: now }
     }
+  };
 
-    const msg = document.getElementById("msg");
+  // lưu Firestore
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/keys?documentId=${key}&key=${apiKey}`;
+  const res = await fetch(url, { method:"POST", body: JSON.stringify(data) });
 
-    // Check mode: if ?id=xxx then show key, else show generate button
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("id");
+  if (res.ok) {
+    // link hết hạn 5 phút
+    const link = `${location.origin}${location.pathname}?k=${key}`;
+    sessionStorage.setItem("k_createdAt", now);
+    sessionStorage.setItem("k_value", key);
+    document.getElementById("result").innerHTML =
+      `✅ Key created<br><b>${key}</b><br><br>
+       Link (5 phút): <a href="${link}">${link}</a>`;
+  } else {
+    document.getElementById("result").innerText = "❌ Lỗi tạo key";
+  }
+};
 
-    if (id) {
-      // === Key Viewer Mode ===
-      (async ()=>{
-        try {
-          const snap = await getDoc(doc(db, "keys", id));
-          if (!snap.exists()) { msg.textContent = "❌ Key không tồn tại"; return; }
-          const data = snap.data();
-          const linkCreatedAt = new Date(data.linkCreatedAt);
-          if (new Date().getTime() - linkCreatedAt.getTime() > 5*60*1000) {
-            msg.textContent = "❌ Link đã hết hạn (5 phút)";
-            return;
-          }
-          msg.textContent = "✅ Key của bạn: " + data.value;
-        } catch {
-          msg.textContent = "⚠️ Lỗi khi đọc dữ liệu";
-        }
-      })();
-      document.getElementById("genBtn").style.display = "none";
+// Khi mở lại link ?k=...
+window.onload = () => {
+  const params = new URLSearchParams(location.search);
+  const k = params.get("k");
+  if (k) {
+    const createdAt = parseInt(sessionStorage.getItem("k_createdAt")||0);
+    if (Date.now() - createdAt > 5*60*1000) {
+      document.body.innerHTML = "<h2>404 — Link đã hết hạn</h2>";
     } else {
-      // === Generate Mode ===
-      document.getElementById("genBtn").onclick = async () => {
-        const keyId = "lunar_" + rand15();
-        const now = new Date();
-        const createdAt = now.toISOString();
-        const validUntil = new Date(now.getTime() + 24*60*60*1000).toISOString();
-        await setDoc(doc(db, "keys", keyId), {
-          value: keyId,
-          createdAt,
-          validUntil,
-          linkCreatedAt: createdAt
-        });
-        const link = window.location.href.split("?")[0] + "?id=" + keyId;
-        msg.innerHTML = `👉 Key được tạo: <a href="${link}">${link}</a>`;
-      };
+      document.getElementById("result").innerHTML =
+        `Key của bạn (còn hạn link): <b>${k}</b>`;
     }
-  </script>
+  }
+};
+</script>
 </body>
 </html>
