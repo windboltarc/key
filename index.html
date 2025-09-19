@@ -6,10 +6,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
-    body { font-family: sans-serif; background: #111; color: #eee; text-align: center; padding: 40px; }
-    button { padding: 10px 20px; border: none; border-radius: 6px; background: #7a5cff; color: white; cursor: pointer; margin: 10px; }
+    body { font-family: Arial, sans-serif; background: #111; color: #eee; text-align: center; padding: 40px; }
+    h1 { color: #7a5cff; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; background: #7a5cff; color: white; cursor: pointer; margin: 10px; font-size: 16px; }
     button:hover { background: #6248d6; }
     .box { margin-top: 20px; font-size: 18px; }
+    a { color: #7a5cff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -27,35 +30,40 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
 
-  // --- Random 15 chars ---
-  function rand15() {
+  // --- Random key generator ---
+  function randString(len) {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let s = '';
-    for (let i = 0; i < 15; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < len; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
     return s;
   }
 
-  // --- Generate key ---
+  // --- Generate key and save to Firestore ---
   async function generateKey() {
-    const id = "lunar_" + rand15();
+    const id = "lunar_" + randString(15);
     const now = new Date();
     const createdAt = now.toISOString();
     const validUntil = new Date(now.getTime() + 24*60*60*1000).toISOString(); // +24h
     const linkCreatedAt = createdAt;
 
-    await db.collection("keys").doc(id).set({
-      value: id,
-      createdAt,
-      validUntil,
-      linkCreatedAt
-    });
+    try {
+      await db.collection("keys").doc(id).set({
+        value: id,
+        createdAt,
+        validUntil,
+        linkCreatedAt
+      });
 
-    const link = window.location.origin + window.location.pathname + "?id=" + id;
-    document.getElementById("output").innerHTML =
-      `✅ Key created!<br><a href="${link}">${link}</a>`;
+      const link = window.location.origin + window.location.pathname + "?id=" + id;
+      document.getElementById("output").innerHTML =
+        `✅ Key created!<br><a href="${link}">${link}</a>`;
+    } catch (err) {
+      console.error("[GenerateKey] Firestore error:", err);
+      document.getElementById("output").innerHTML = "⚠️ Lỗi khi tạo key. Check console log.";
+    }
   }
 
-  // --- View key nếu có ?id= ---
+  // --- View key from ?id= param ---
   async function viewKey(id) {
     try {
       const snap = await db.collection("keys").doc(id).get();
@@ -63,26 +71,29 @@
         document.getElementById("output").innerHTML = "❌ 404 - Key không tồn tại";
         return;
       }
+
       const data = snap.data();
       const linkCreatedAt = new Date(data.linkCreatedAt);
       const now = new Date();
+
+      // Check 5 phút link expire
       if (now.getTime() - linkCreatedAt.getTime() > 5*60*1000) {
         document.getElementById("output").innerHTML = "❌ Link đã hết hạn (quá 5 phút)";
         return;
       }
+
       document.getElementById("output").innerHTML = 
         `🔑 Key của bạn: <b>${data.value}</b>`;
     } catch (err) {
-      console.error(err);
-      document.getElementById("output").innerHTML = "⚠️ Lỗi khi load key";
+      console.error("[ViewKey] Firestore error:", err);
+      document.getElementById("output").innerHTML = "⚠️ Lỗi khi load key. Check console log.";
     }
   }
 
-  // --- Auto check param ---
+  // --- Auto check ?id= param ---
   const params = new URLSearchParams(window.location.search);
   if (params.has("id")) {
-    const id = params.get("id");
-    viewKey(id);
+    viewKey(params.get("id"));
   }
 </script>
 </body>
