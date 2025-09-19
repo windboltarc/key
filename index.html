@@ -1,64 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lunar Key</title>
-<style>
-  body { font-family: Arial, sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:linear-gradient(135deg,#1c1c1c,#4b4b4b); color:white; }
-  .container { text-align:center; background:#222; padding:2rem; border-radius:15px; box-shadow:0 0 20px rgba(0,0,0,0.5); }
-  .key { font-size:1.5rem; margin:1rem 0; color:#00e676; word-break:break-all; }
-  .link { font-size:1rem; color:#4d6eff; margin-top:1rem; display:block; text-decoration:none; }
-  .note { margin-top:1rem; font-size:0.9rem; color:#aaa; }
-</style>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
-import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyD_ujJmgqK6DJJd7RymFiUpE-kY7hQsdGg",
-  authDomain: "sourcestore999ms.firebaseapp.com",
-  projectId: "sourcestore999ms",
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-function generateKey() {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let s = "";
-  for(let i=0;i<20;i++) s+=chars.charAt(Math.floor(Math.random()*chars.length));
-  return "Lunar_" + s;
-}
-
-async function saveKey(key){
-  try{
-    await setDoc(doc(db, "keys", key), { key, createdAt: serverTimestamp(), used:false });
-    return true;
-  }catch(e){ console.error(e); return false; }
-}
-
-async function init(){
-  const key = generateKey();
-  const ok = await saveKey(key);
-  if(ok){
-    document.getElementById("key").textContent = key;
-    document.getElementById("link").textContent = window.location.origin + "/" + key;
-    document.getElementById("link").href = window.location.origin + "/" + key;
-  }else{
-    document.getElementById("key").textContent = "Error generating key!";
-  }
-}
-
-window.addEventListener("DOMContentLoaded", init);
-</script>
+  <meta charset="UTF-8" />
+  <title>LunarKey</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #111; color: #eee; text-align: center; padding: 40px; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; background: #7a5cff; color: white; cursor: pointer; margin: 10px; }
+    button:hover { background: #6248d6; }
+    .box { margin-top: 20px; font-size: 18px; }
+  </style>
 </head>
 <body>
-<div class="container">
-  <h1>Your Lunar Key</h1>
-  <div class="key" id="key">Generating...</div>
-  <a class="link" id="link" href="#">Link</a>
-  <div class="note">This key is one-time use and valid for 24 hours.</div>
-</div>
+  <h1>🔑 LunarKey System</h1>
+  <button onclick="generateKey()">Generate Key</button>
+  <div class="box" id="output"></div>
+
+<script>
+  // --- Firebase init ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyD_ujJmgqK6DJJd7RymFiUpE-kY7hQsdGg",
+    authDomain: "sourcestore999ms.firebaseapp.com",
+    projectId: "sourcestore999ms",
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // --- Random 15 chars ---
+  function rand15() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let s = '';
+    for (let i = 0; i < 15; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+  }
+
+  // --- Generate key ---
+  async function generateKey() {
+    const id = "lunar_" + rand15();
+    const now = new Date();
+    const createdAt = now.toISOString();
+    const validUntil = new Date(now.getTime() + 24*60*60*1000).toISOString(); // +24h
+    const linkCreatedAt = createdAt;
+
+    await db.collection("keys").doc(id).set({
+      value: id,
+      createdAt,
+      validUntil,
+      linkCreatedAt
+    });
+
+    const link = window.location.origin + window.location.pathname + "?id=" + id;
+    document.getElementById("output").innerHTML =
+      `✅ Key created!<br><a href="${link}">${link}</a>`;
+  }
+
+  // --- View key nếu có ?id= ---
+  async function viewKey(id) {
+    try {
+      const snap = await db.collection("keys").doc(id).get();
+      if (!snap.exists) {
+        document.getElementById("output").innerHTML = "❌ 404 - Key không tồn tại";
+        return;
+      }
+      const data = snap.data();
+      const linkCreatedAt = new Date(data.linkCreatedAt);
+      const now = new Date();
+      if (now.getTime() - linkCreatedAt.getTime() > 5*60*1000) {
+        document.getElementById("output").innerHTML = "❌ Link đã hết hạn (quá 5 phút)";
+        return;
+      }
+      document.getElementById("output").innerHTML = 
+        `🔑 Key của bạn: <b>${data.value}</b>`;
+    } catch (err) {
+      console.error(err);
+      document.getElementById("output").innerHTML = "⚠️ Lỗi khi load key";
+    }
+  }
+
+  // --- Auto check param ---
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("id")) {
+    const id = params.get("id");
+    viewKey(id);
+  }
+</script>
 </body>
 </html>
