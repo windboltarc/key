@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lunar Key</title>
+<style>
+  body { font-family: Arial, sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:linear-gradient(135deg,#1c1c1c,#4b4b4b); color:white; }
+  .container { text-align:center; background:#222; padding:2rem; border-radius:15px; box-shadow:0 0 20px rgba(0,0,0,0.5); }
+  .key { font-size:1.5rem; margin:1rem 0; color:#00e676; word-break:break-all; }
+  .link { font-size:1rem; color:#4d6eff; margin-top:1rem; display:block; text-decoration:none; }
+  .note { margin-top:1rem; font-size:0.9rem; color:#aaa; }
+</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
+import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD_ujJmgqK6DJJd7RymFiUpE-kY7hQsdGg",
+  authDomain: "sourcestore999ms.firebaseapp.com",
+  projectId: "sourcestore999ms",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+function generateKey() {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let s = "";
+  for(let i=0;i<20;i++) s+=chars.charAt(Math.floor(Math.random()*chars.length));
+  return "Lunar_" + s;
+}
+
+async function saveKey(key){
+  try{
+    await setDoc(doc(db, "keys", key), { key, createdAt: serverTimestamp(), used:false });
+    return true;
+  }catch(e){ console.error(e); return false; }
+}
+
+async function init(){
+  const key = generateKey();
+  const ok = await saveKey(key);
+  if(ok){
+    document.getElementById("key").textContent = key;
+    document.getElementById("link").textContent = window.location.origin + "/" + key;
+    document.getElementById("link").href = window.location.origin + "/" + key;
+  }else{
+    document.getElementById("key").textContent = "Error generating key!";
+  }
+}
+
+window.addEventListener("DOMContentLoaded", init);
+</script>
+</head>
+<body>
+<div class="container">
+  <h1>Your Lunar Key</h1>
+  <div class="key" id="key">Generating...</div>
+  <a class="link" id="link" href="#">Link</a>
+  <div class="note">This key is one-time use and valid for 24 hours.</div>
+</div>
+</body>
+</html>
